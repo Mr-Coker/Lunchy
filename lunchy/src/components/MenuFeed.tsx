@@ -6,6 +6,7 @@ export interface MenuItem {
   id: string;
   name: string;
   vendorName: string;
+  vendorId?: string;
   description: string;
   price: number;
   category: string;

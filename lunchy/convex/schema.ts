@@ -54,4 +54,10 @@ export default defineSchema({
   })
     .index("by_vendor", ["vendorId"])
     .index("by_delivery_date", ["deliveryDate"]),
+
+  phoneVerifications: defineTable({
+    phone: v.string(),
+    code: v.string(),
+    expiresAt: v.number(),
+  }).index("by_phone", ["phone"]),
 });

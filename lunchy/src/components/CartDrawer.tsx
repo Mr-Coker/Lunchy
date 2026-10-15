@@ -1,6 +1,9 @@
 import { useState } from "react";
+import { useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import { X, Trash2, ShoppingBag, ArrowRight, Building, MapPin, Phone } from "lucide-react";
-import {type MenuItem } from "./MenuFeed";
+import { type MenuItem } from "./MenuFeed";
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -17,27 +20,67 @@ export const CartDrawer = ({
   onRemoveItem,
   onClearCart,
 }: CartDrawerProps) => {
+  // Call Convex mutation hook at the top level of the component
+  const createOrder = useMutation(api.orders.createOrder);
+
   const [buildingName, setBuildingName] = useState("");
   const [landmark, setLandmark] = useState("");
   const [phone, setPhone] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
   // Calculate Subtotal & Delivery Fee
   const subtotal = cartItems.reduce((acc, item) => acc + item.price, 0);
-  const serviceCharge = cartItems.length > 0 ?  5 : 0; // Flat 5 rate for Ministries area
+  const serviceCharge = cartItems.length > 0 ? 5 : 0; // Flat 5 rate for Ministries area
   const total = subtotal + serviceCharge;
 
-  const handleCheckout = (e: React.FormEvent) => {
+  const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!buildingName || !phone) {
+
+    if (cartItems.length === 0) {
+      alert("Your cart is empty!");
+      return;
+    }
+
+    if (!buildingName.trim() || !phone.trim()) {
       alert("Please provide your building name and phone number for delivery.");
       return;
     }
 
-    alert(`Order Placed Successfully! Total: GH₵ ${total.toFixed(2)}`);
-    onClearCart();
-    onClose();
+    setIsSubmitting(true);
+    try {
+      // Calculate next day's date in YYYY-MM-DD format
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const deliveryDate = tomorrow.toISOString().split("T")[0];
+
+      await createOrder({
+        vendorId: (cartItems[0].vendorId || cartItems[0].id) as Id<"vendors">,
+        items: cartItems.map((item) => ({
+          menuItemId: item.id as Id<"menuItems">,
+          quantity: 1,
+          priceAtOrder: item.price,
+        })),
+        totalAmount: total,
+        deliveryDate,
+        deliveryAddress: {
+          buildingName: buildingName.trim(),
+          landmark: landmark.trim() || undefined,
+          areaZone: "Ministries, Accra",
+        },
+        userPhone: phone.trim(),
+      });
+
+      alert("Pre-order placed successfully!");
+      onClearCart();
+      onClose();
+    } catch (error) {
+      console.error("Order error:", error);
+      alert(error instanceof Error ? error.message : "Failed to place order. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -199,9 +242,10 @@ export const CartDrawer = ({
             <button
               type="submit"
               form="checkout-form"
-              className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 text-sm transition-transform active:scale-[0.98]"
+              disabled={isSubmitting}
+              className="w-full bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 text-sm transition-transform active:scale-[0.98]"
             >
-              <span>Confirm Next-Day Pre-Order</span>
+              <span>{isSubmitting ? "Placing Order..." : "Confirm Next-Day Pre-Order"}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
